@@ -1,6 +1,11 @@
+import json
 import os
 import pwd
+import shutil
 from subprocess import call, Popen, PIPE, check_output
+
+# USER_AUTHORIZATION_PROCESS = "USER_AUTHORIZATION_PROCESS"
+# SHA_PROCESS = "SHA_PROCESS"
 
 ALLOW_EXE = "allow"
 DENY_EXE = "deny"
@@ -9,10 +14,76 @@ ALWAYS_ASK_EXE = "always_ask"
 PROCESS_EXE = "PROCESS"
 PATH_TO_PROCESS_EXE = "PATH_EXE_PROCESS"
 
+
 NOT_EXISTS = -2
 KILL_IT = -1
 ASK_THEM = 0
 ALLOW_IT = 1
+
+NAME_OF_SCRIPT = os.path.basename(__file__)
+COPY_FILE_TO = "."
+FOLDER_SAVING_EVENT = os.environ["HOME"]+"/PROJECT_PYTHON_WITH_NO_NAME"
+FILE_USER_EXE_AUTHORIZATION = FOLDER_SAVING_EVENT+"/AUTHORIZATION_EXE.json"
+FILE_HASH_EXE = FOLDER_SAVING_EVENT+"/FILE_HASH_EXE.json"
+
+# print("pwd.getpwall() --> {}".format(pwd.getpwnam("gespenst").pw_dir))
+# print(os) # getpid(), getppid()
+# print("geteuid --> ", os.geteuid())
+# print("geteuid --> ", os.environ["HOME"])
+
+def createFolderForSave():
+    try:
+        os.mkdir(FOLDER_SAVING_EVENT)
+    except KeyError as k:
+        print("[createFolderForSave] Error: {}".format(k))
+        return None
+    except FileExistsError as fee:
+        print("Le fichier existe.")
+        return False
+
+def readFromFile(json_file=FILE_USER_EXE_AUTHORIZATION):
+    json_file_read = open(json_file, "r")
+    data_from_file = json.load(json_file_read)
+    json_file_read.close()
+    return data_from_file
+
+
+def writeInJsonFile(data_json, json_file=FILE_USER_EXE_AUTHORIZATION):
+    json_file_write = open(json_file, "w")
+    json_file_write.write(json.dumps(data_json))
+    json_file_write.close()
+    return True
+
+def addUserInJson(json_file=FILE_USER_EXE_AUTHORIZATION):
+    try:
+        read_folder = readFromFile()
+        for rf in read_folder:
+            print("rf --> {}".format(rf))
+    except KeyError as k:
+        print("[createFolderForSave] Error: {}".format(k))
+        return None
+
+def initializeAllConfiguration():
+    # call(["cp", "-v", "./{}".format(NAME_OF_SCRIPT), "{}".format(COPY_FILE_TO)])
+    shutil.copy2(NAME_OF_SCRIPT, COPY_FILE_TO)
+
+    if not os.path.isdir(FOLDER_SAVING_EVENT):
+        createFolderForSave()
+
+    if not os.path.isfile(FILE_USER_EXE_AUTHORIZATION):
+        user_exe_authorization = {"all": {ALLOW_EXE : {PROCESS_EXE: [], PATH_TO_PROCESS_EXE: []}, DENY_EXE : {PROCESS_EXE: [], PATH_TO_PROCESS_EXE: []}, ALWAYS_ASK_EXE: {PROCESS_EXE: [], PATH_TO_PROCESS_EXE: []}}}
+        writeInJsonFile(user_exe_authorization)
+
+    if not os.path.isfile(FILE_HASH_EXE):
+        destination_file = COPY_FILE_TO + "/" + NAME_OF_SCRIPT
+        hash_exe = hashExeSha256(destination_file)
+        all_sha256_exe = {destination_file : hash_exe}
+        writeInJsonFile(all_sha256_exe, json_file=FILE_HASH_EXE)
+
+# createFolderForSave("gespenst")
+# addUserInJson()
+# initializeAllConfiguration()
+exit(1)
 
 # user_exe_authorization = {"all": {ALLOW_EXE : [], DENY_EXE : [], ALWAYS_ASK_EXE: []}}
 user_exe_authorization = {"all": {ALLOW_EXE : {PROCESS_EXE: [], PATH_TO_PROCESS_EXE: []}, DENY_EXE : {PROCESS_EXE: [], PATH_TO_PROCESS_EXE: []}, ALWAYS_ASK_EXE: {PROCESS_EXE: [], PATH_TO_PROCESS_EXE: []}}}
@@ -21,6 +92,7 @@ user_exe_authorization = {"all": {ALLOW_EXE : {PROCESS_EXE: [], PATH_TO_PROCESS_
 all_sha256_exe = {}
 
 def hashExeSha256(path_exe):
+    path_exe = os.path.abspath(path_exe)
     sha256sum = Popen(('sha256sum', path_exe), stdout=PIPE)
     reformate_without_filename = check_output(('cut', '-d', ' ', '-f', '1'), stdin=sha256sum.stdout).decode("latin").strip()
     sha256sum.wait()

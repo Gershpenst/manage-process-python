@@ -362,6 +362,10 @@ def getFileFromProcess(process):
 all_process_allow = psutil.pids()
 # all_process_refuse = []
 
+def initializeAllProcess():
+    all_process_allow = psutil.pids()
+    
+
 def findNewProcess(all_process_allow, all_process):
     new_process = []
     for ap in all_process:
