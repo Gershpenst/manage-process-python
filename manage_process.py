@@ -2,6 +2,8 @@ import psutil
 from subprocess import call, Popen, PIPE, check_output
 import time
 import os
+
+from manage_authorization_process import manageAuthorizationExecutionForUser
 # import pwd
 
 
@@ -10,135 +12,9 @@ https://unix.stackexchange.com/questions/411159/linux-is-it-possible-to-see-only
 ps --ppid 2 -p 2 -o uname,pid,ppid,cmd,cls
 '''
 
-
 # pop-up : 
 # https://unix.stackexchange.com/questions/144924/how-can-i-create-a-message-box-from-the-command-line
 # https://github.com/dunst-project/dunst
-
-# psutil.pid_exists
-
-# ALLOW_EXE = "allow"
-# DENY_EXE = "deny"
-# ALWAYS_ASK_EXE = "always_ask"
-
-# PROCESS_EXE = "PROCESS"
-# PATH_TO_PROCESS_EXE = "PATH_EXE_PROCESS"
-
-# KILL_IT = -1
-# ALLOW_IT = 1
-# ASK_THEM = 0
-
-# # user_exe_authorization = {"all": {ALLOW_EXE : [], DENY_EXE : [], ALWAYS_ASK_EXE: []}}
-# user_exe_authorization = {"all": {ALLOW_EXE : {PATH_TO_PROCESS_EXE: [], PATH_TO_PROCESS_EXE: []}, DENY_EXE : {PATH_TO_PROCESS_EXE: [], PATH_TO_PROCESS_EXE: []}, ALWAYS_ASK_EXE: {PATH_TO_PROCESS_EXE: [], PATH_TO_PROCESS_EXE: []}}}
-
-# # Regroupe une pair (chemin complet vers un fichier, son hash en sha256)
-# all_sha256_exe = {}
-
-# def createUserForExeAuthorization():
-#     for user in pwd.getpwall():
-#         supposed_normal_user = int(user.pw_uid)
-#         if supposed_normal_user >= 1000 and supposed_normal_user <= 60000:
-#             print("createUserForExeAuthorization ==> ", user.pw_name)
-#             user_exe_authorization[user.pw_name] = {"all": {ALLOW_EXE : {PATH_TO_PROCESS_EXE: [], PATH_TO_PROCESS_EXE: []}, DENY_EXE : {PATH_TO_PROCESS_EXE: [], PATH_TO_PROCESS_EXE: []}, ALWAYS_ASK_EXE: {PATH_TO_PROCESS_EXE: [], PATH_TO_PROCESS_EXE: []}}}
-
-# def hashExeSha256(path_exe):
-#     sha256sum = Popen(('sha256sum', path_exe), stdout=PIPE)
-#     reformate_without_filename = check_output(('cut', '-d', ' ', '-f', '1'), stdin=sha256sum.stdout).decode("latin").strip()
-#     sha256sum.wait()
-#     return reformate_without_filename
-
-# def putFiableExeForUser(path_exe, authorization, type_of_authorization, user="all"):
-#     # sha_sum = check_output(["sha256sum", path_exe, "|", "cut", "-d", " ", "-f", "1" ]).decode("latin")
-#     reformate_without_filename = hashExeSha256(path_exe)
-#     print("sha_sum ==> {}".format(reformate_without_filename))
-#     all_sha256_exe[path_exe] = reformate_without_filename
-#     # print("putFiableExeForUser ==> {} - {} - {}\n".format(path_exe, authorization, user))
-#     user_exe_authorization[user][authorization][type_of_authorization].append(path_exe)
-
-# def authorizationForUser(path_exe, user, type_of_authorization):
-#     if type_of_authorization == PROCESS_EXE or type_of_authorization == PATH_TO_PROCESS_EXE:
-#         if path_exe in user_exe_authorization[user][DENY_EXE][type_of_authorization]:
-#             return DENY_EXE, all_sha256_exe[path_exe]
-#         if path_exe in user_exe_authorization[user][ALWAYS_ASK_EXE][type_of_authorization]:
-#             return ALWAYS_ASK_EXE, all_sha256_exe[path_exe]
-#         if path_exe in user_exe_authorization[user][ALLOW_EXE][type_of_authorization]:
-#             return ALLOW_EXE, all_sha256_exe[path_exe]
-#     return None
-
-# def getAuthorizedShaForUser(path_exe, user, type_of_authorization):
-#     if path_exe in all_sha256_exe:
-#         all_user = authorizationForUser(path_exe, "all", type_of_authorization)
-#         if all_user != None:
-#             return all_user
-#         specific_user = authorizationForUser(path_exe, user, type_of_authorization)
-#         if specific_user != None:
-#             return specific_user
-#     return None
-
-
-# # KILL_IT, ALLOW_IT, ASK_THEM
-# # PROCESS_EXE, PATH_TO_PROCESS_EXE
-# def manageAuthorizationExecutionForUser(path_exe, user):
-#     get_authorization_hash_user_path = getAuthorizedShaForUser(path_exe, user, PATH_TO_PROCESS_EXE)
-#     if get_authorization_hash_user_path[0] == DENY_EXE:
-#         return KILL_IT
-
-#     get_authorization_hash_user_process = getAuthorizedShaForUser(path_exe, user, PROCESS_EXE)
-#     hash_exe = hashExeSha256(path_exe)
-#     if get_authorization_hash_user_process[0] == DENY_EXE and get_authorization_hash_user_process[1] == hash_exe:
-#         return KILL_IT, get_authorization_hash_user_process
-#     elif get_authorization_hash_user_process[0] == ALLOW_EXE and get_authorization_hash_user_process[1] == hash_exe:
-#         return ALLOW_IT, get_authorization_hash_user_process
-        
-#     return ASK_THEM, get_authorization_hash_user_process
-
-# def manageProcessAuthorizationExe(path_exe, type_of_authorization, user):
-#     authorization_exe = input("Accepter, refuser ou toujours demander l'autorisation d'utiliser un binaire [acc/den/ask] ? ")
-#     if authorization_exe == "acc":
-#         putFiableExeForUser(path_exe, ALLOW_EXE, type_of_authorization, user=user)
-#     elif authorization_exe == "den":
-#         putFiableExeForUser(path_exe, DENY_EXE, type_of_authorization, user=user)
-#     elif authorization_exe == "ask":
-#         putFiableExeForUser(path_exe, ALWAYS_ASK_EXE, type_of_authorization, user=user)
-
-# def mainProcessAuthorizationExe(path_exe, user):
-#     # get_authorization_hash_user = getAuthorizedShaForUser(path_exe, user)
-#     # hash_exe = hashExeSha256(path_exe)
-
-#     manage_process = manageAuthorizationExecutionForUser(path_exe, user)
-    
-#     if get_authorization_hash_user[0] == None and get_authorization_hash_user[1] != hash_exe:
-#         authorization_exe = ""
-#         while(authorization_exe != "acc" and authorization_exe != "den" and authorization_exe != "ask"):
-#             manageProcessAuthorizationExe(path_exe, PROCESS_EXE, user)
-#             # authorization_exe = input("Accepter, refuser ou toujours demander l'autorisation d'utiliser un binaire [acc/den/ask] ? ")
-#             # if authorization_exe == "acc":
-#             #     putFiableExeForUser(path_exe, ALLOW_EXE, user=user)
-#             # elif authorization_exe == "den":
-#             #     putFiableExeForUser(path_exe, DENY_EXE, user=user)
-#             # elif authorization_exe == "ask":
-#             #     putFiableExeForUser(path_exe, ALWAYS_ASK_EXE, user=user)
-
-
-# # PROCESS_EXE, PATH_TO_PROCESS_EXE
-
-# createUserForExeAuthorization()
-# print("user_exe_authorization ==> {}".format(user_exe_authorization))
-
-# putFiableExeForUser("/usr/bin/python2.7", "allow")
-# get_fiable_path = getAuthorizedShaForUser("/usr/bin/python2.7", "gespenst")
-# print("get_fiable_path ==> {}\n".format(get_fiable_path))
-
-# putFiableExeForUser("/usr/bin/sleep", "allow", user="gespenst")
-# get_fiable_path = getAuthorizedShaForUser("/usr/bin/sleep", "gespenst")
-# print("Sleep for gespenst ==> {}\n".format(get_fiable_path))
-
-# get_fiable_path = getAuthorizedShaForUser("/usr/bin/sleep", "all")
-# print("Sleep for all ==> {}\n".format(get_fiable_path))
-
-# print("user_exe_authorization ==> {}".format(user_exe_authorization))
-
-# exit(1)
 
 print("process users ==> {}".format(psutil.users()))
 
@@ -147,8 +23,8 @@ print("pids ==> {} and last pid {}".format(pids, pids[-2]))
 
 ###n OU
 
-for proc in psutil.process_iter(['pid', 'name', 'username']):
-    print(proc.info)
+# for proc in psutil.process_iter(['pid', 'name', 'username']):
+#     print(proc.info)
 
 ## A VOIR  : psutil.wait_procs
 
@@ -190,26 +66,17 @@ $ ps -o ppid= -p 9951
 def getKernelProcess():
     # ps --ppid 2 -p 2 -o pid --no-header
     kernel_process = check_output(["ps", "--ppid", "2", "-p", "2", "-o", "pid", "--no-header"]).decode("latin").strip(' \t\n\r').split("\n")
+    kernel_process.append(1)
     for i in range(len(kernel_process)):
         kernel_process[i] = int(kernel_process[i])
     print("kernel_process --> {}".format(kernel_process))
     return kernel_process
 
 def getFileNotFoundInExe(pid):
-    # ps eo command -p 12107 --no-header
-    # file_not_found_in_exe = check_output(["ps", "eo", "command", "-p", str(pid), "--no-header"]).decode("latin").strip(' \t\n\r').split("\n")
-    # print("file_not_found_in_exe --> {}".format(file_not_found_in_exe))
-
-    # ret_pwdx = call(["pwdx", str(pid)])
-    # print("ret_pwdx ==> {}".format(ret_pwdx))
-
-    # ret_get_file = os.readlink("/proc/{}/cwd".format(str(pid))) # call(["ls", "-la", "/proc/{}/cwd/".format(str(pid))])
-    # print("ret_get_file ==> {}".format(ret_get_file))
     path_executable = []
 
     file_not_found_in_exe = psutil.Process(pid).as_dict()
     path_exe = file_not_found_in_exe["environ"]["PWD"]
-    # print("t --> {} {} {}".format(file_not_found_in_exe["exe"], path_exe, file_not_found_in_exe["cmdline"]))
     for cmd in file_not_found_in_exe["cmdline"]:
         is_path_file_exists = os.path.isfile(path_exe+"/"+cmd) 
         if not is_path_file_exists:
@@ -373,16 +240,7 @@ def findNewProcess(all_process_allow, all_process):
             new_process.append(ap)
     return new_process
 
-def handleProcess():
-    all_process = psutil.pids()
-    new_process = findNewProcess(all_process_allow, all_process)
-    print("new_process --> {}".format(new_process))
-    kernel_process = getKernelProcess()
-    for np in new_process:
-        if not (np in kernel_process):
-            ret_resp = call(["kill", "-STOP", str(np)])
-            print("[>] Processus {} stoppé.".format(np))
-            manageProcessForUser(np)
+
 
 def manageKillProcess(pid):
     process_kill = psutil.Process(pid)
@@ -409,9 +267,45 @@ def manageKillProcess(pid):
     '''
 
 
+# def manageProcessForUser(pid):
+#     print("p.name : {}".format(p.as_dict()["name"]))
+#     response_kill = ""
+#     while(response_kill != "y" and response_kill != "n"):
+#         response_kill = input("Voulez-vous tuer le process ou pas [y/n] ? ")
+#         print("response_kill => {}".format(response_kill))
+#         if(response_kill == 'y'):
+#             print("Kill du processus {} en cours...".format(pid))
+#             manageKillProcess(pid)
+#         elif response_kill == "n":
+#             ret_resp = call(["kill", "-CONT", str(pid)])
+#             all_process_allow.append(pid)
+
+
+# def handleProcess():
+#     all_process = psutil.pids()
+#     new_process = findNewProcess(all_process_allow, all_process)
+#     print("new_process --> {}".format(new_process))
+#     kernel_process = getKernelProcess()
+
+#     # Faire le trie des process avec le fichier qu'on a mis en place (execution des process dans un chemin, certains process etc)
+#     # peut-être en faisant du parallélisme.
+
+#     # a = ['apple', 'carrot', 'lemon']
+#     # b = ['pineapple', 'apple', 'tomato']
+#     # new_list = [fruit for fruit in all_process if fruit not in b]
+
+#     # manageAuthorizationExecutionForUser
+
+#     # ASK_AGAIN && Non trouvé dans les fichiers
+#     for np in new_process:
+#         if not (np in kernel_process):
+#             ret_resp = call(["kill", "-STOP", str(np)])
+#             print("[>] Processus {} stoppé.".format(np))
+#             manageProcessForUser(np)
+
+
 def manageProcessForUser(pid):
     print("p.name : {}".format(p.as_dict()["name"]))
-    # if p.as_dict()["name"] == 'python3':
     response_kill = ""
     while(response_kill != "y" and response_kill != "n"):
         response_kill = input("Voulez-vous tuer le process ou pas [y/n] ? ")
@@ -419,12 +313,95 @@ def manageProcessForUser(pid):
         if(response_kill == 'y'):
             print("Kill du processus {} en cours...".format(pid))
             manageKillProcess(pid)
-            # ret_resp = call(["kill", "-SIGTERM", str(pid)])
-            # print("kill ==> {}".format(ret_resp))
         elif response_kill == "n":
             ret_resp = call(["kill", "-CONT", str(pid)])
             all_process_allow.append(pid)
 
+# 'OLDPWD': '/home/gespenst/.vscode-server ou bien "ps_process.open_files()"
+# Exe
+# terminal (permet de trouver les terminals ouverts ou pas) ---> non
+
+'''
+Première execution --> mettre dans un tableau tous les processus pseudo-accepté.
+A chaque fois qu'un processus apparait, on regarde s'il a été refusé, puis accepté.
+Si il est en "ask_again" ou "None", on fait autre chose
+
+Soit : On demande à l'utilisateur de valider/refuser le process
+Soit : On le fait automatiquement (on refuse le process après XX secondes)
+'''
+
+def initializeAllProcessPresent():
+    all_process = psutil.pids()
+    kernel_process = getKernelProcess()
+    new_process = [ap for ap in all_process if ap not in kernel_process]
+    print("new_process --> {}".format(new_process))
+    for np in new_process:
+        try:
+            ps_process = psutil.Process(np)
+            print("Process ==> {}".format(np))
+            path_not_found = getFileNotFoundInExe(np)
+            print("Path not found --> {}".format(path_not_found))
+            manage_process = manageAuthorizationExecutionForUser(ps_process.cmdline()[0], "gespenst")
+            print("Process_manage --> {}".format(manage_process))
+            # ps_process = psutil.Process(np)
+            # print("\n\nFormat process -->\nExe : {}\ncmdline: {}\nenviron : {}\nparents : {}\nchildren : {}\ncwd : {}\nterminal : {}\nOpenFile : {}\n".format(
+            #     ps_process.exe(),
+            #     ps_process.cmdline(),
+            #     ps_process.environ(),
+            #     ps_process.parents(),
+            #     ps_process.children(recursive=True),
+            #     ps_process.cwd(),
+            #     ps_process.terminal(),
+            #     ps_process.open_files()
+            # ))
+            sss = input("Pass : ")
+            # ps_process.suspend()
+            # print("[>] Processus {} stoppé.".format(np))
+            # manageProcessForUser(np)
+        except psutil.AccessDenied:
+            continue
+
+    return new_process
+
+initializeAllProcessPresent()
+exit(1)
+
+def handleProcess():
+    all_process = psutil.pids()
+    # new_process = findNewProcess(all_process_allow, all_process)
+    # print("new_process --> {}".format(new_process))
+    kernel_process = getKernelProcess()
+
+    # Faire le trie des process avec le fichier qu'on a mis en place (execution des process dans un chemin, certains process etc)
+    # peut-être en faisant du parallélisme.
+
+    # a = ['apple', 'carrot', 'lemon']
+    # b = ['pineapple', 'apple', 'tomato']
+    new_process = [ap for ap in all_process if ap not in kernel_process]
+    print("new_process --> {}".format(new_process))
+
+    # manageAuthorizationExecutionForUser
+
+    # ASK_AGAIN && Non trouvé dans les fichiers
+    for np in new_process:
+        try:
+            ps_process = psutil.Process(np)
+            print("\n\nFormat process -->\nExe : {}\ncmdline: {}\nenviron : {}\nparents : {}\nchildren : {}\ncwd : {}\nterminal : {}\nOpenFile : {}\n".format(
+                ps_process.exe(),
+                ps_process.cmdline(),
+                ps_process.environ(),
+                ps_process.parents(),
+                ps_process.children(recursive=True),
+                ps_process.cwd(),
+                ps_process.terminal(),
+                ps_process.open_files()
+            ))
+            sss = input("Pass : ")
+            # ps_process.suspend()
+            # print("[>] Processus {} stoppé.".format(np))
+            # manageProcessForUser(np)
+        except psutil.AccessDenied:
+            continue
 
 # getFileFromProcess(p)
 
