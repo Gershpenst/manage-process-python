@@ -1,7 +1,10 @@
 import psutil
-from subprocess import call, Popen, PIPE, check_output
+from subprocess import call, Popen, PIPE, check_output, CalledProcessError, DEVNULL
 import time
 import os
+from glob import glob
+
+from manage_authorization_process import mainProcessAuthorizationExe
 
 from manage_authorization_process import manageAuthorizationExecutionForUser
 # import pwd
@@ -16,10 +19,6 @@ ps --ppid 2 -p 2 -o uname,pid,ppid,cmd,cls
 # https://unix.stackexchange.com/questions/144924/how-can-i-create-a-message-box-from-the-command-line
 # https://github.com/dunst-project/dunst
 
-print("process users ==> {}".format(psutil.users()))
-
-pids = psutil.pids()
-print("pids ==> {} and last pid {}".format(pids, pids[-2]))
 
 ###n OU
 
@@ -33,7 +32,8 @@ print("pids ==> {} and last pid {}".format(pids, pids[-2]))
 # p = psutil.Process(pids[-1])
 
 # p = psutil.Process(9149)
-p = psutil.Process(25404)
+
+
 # exe()
 # cmdline()
 # environ()
@@ -47,21 +47,6 @@ p = psutil.Process(25404)
 # kill()
 
 
-# p = psutil.Process(2)
-print("Specific process --> {}".format(p))
-
-# https://www.linuxquestions.org/questions/linux-kernel-70/which-pids-are-reserved-for-the-kernel-4175417220/
-'''
-$ cat /proc/9945/task/9945/children
-9951
-$ readlink -f /proc/9951/exe
-/home/gespenst/fraise
-
-# Get parent ID
-$ ps -o ppid= -p 9951
-9945
-'''
-
 
 def getKernelProcess():
     # ps --ppid 2 -p 2 -o pid --no-header
@@ -72,20 +57,91 @@ def getKernelProcess():
     print("kernel_process --> {}".format(kernel_process))
     return kernel_process
 
+def removeItemInList(lst, item):
+    try:
+        return lst.remove(item)
+    except Exception:
+        return lst
+
+
+def whereisPathForCommand(cmd):
+    whereis_cmd = Popen(('whereis', "-b", cmd), stdout=PIPE, stderr=DEVNULL)
+    reformate_whereis_cmd = check_output(('cut', '-d', ' ', '-f', '2'), stdin=whereis_cmd.stdout).decode("latin").strip()
+    whereis_cmd.wait()
+    # print("reformate_whereis_cmd --> {}".format(reformate_whereis_cmd))
+    if reformate_whereis_cmd == "" or reformate_whereis_cmd[-1] == ":":
+        return None
+    return reformate_whereis_cmd
+
 def getFileNotFoundInExe(pid):
+    # print("\nEntrée dans la fonction getFileNotFoundInExe ---->\n")
+    # pid = 563
     path_executable = []
 
     file_not_found_in_exe = psutil.Process(pid).as_dict()
-    path_exe = file_not_found_in_exe["environ"]["PWD"]
+    # print("file_not_found_in_exe -- {}".format(file_not_found_in_exe))
+    path_exe = ""
+    if file_not_found_in_exe["environ"] != None and ("PWD" in file_not_found_in_exe["environ"]):
+        path_exe = file_not_found_in_exe["environ"]["PWD"]
+        
     for cmd in file_not_found_in_exe["cmdline"]:
-        is_path_file_exists = os.path.isfile(path_exe+"/"+cmd) 
-        if not is_path_file_exists:
-            ret_get_path = check_output("find {} -name {} 2> /dev/null".format(path_exe, cmd), shell=True).decode("latin").strip()
-            if(len(ret_get_path) > 0):
-                # print("ret_get_path ==> {}".format(ret_get_path))
-                path_executable.append(ret_get_path)
+        if cmd == "" or cmd == "*" or cmd == "/" or ' ' in cmd or cmd[0] == "-":
+            continue
         else:
-            path_executable.append(os.path.abspath(path_exe+"/"+cmd))
+            whereis_cmd = whereisPathForCommand(cmd)
+            if whereis_cmd != None:
+                path_executable.append(os.path.abspath(whereis_cmd))
+                continue
+        # else:
+        #     try:
+        #         output_which = check_output(["which", cmd], stderr=subprocess.STDERR).decode("latin").strip(' \t\n\r').split("\n")
+        #         print("output_which --> {}".format(output_which))
+        #         if len(output_which) > 0:
+        #             for ow in output_which:
+        #                 path_executable.append(os.path.abspath(ow))
+        #             continue
+        #     except Exception:
+        #         pass
+        
+        try_list_path = [cmd, path_exe+"/"+cmd]
+        for path_file in try_list_path:
+            is_path_file_exists = os.path.isfile(path_file)
+            
+
+            path_folder_file = glob(path_file)
+            # print("glob_file_folder --> {} -- {} -- {}".format(cmd, path_file, path_folder_file))
+            if len(path_folder_file) > 0 and not os.path.isdir(path_file):
+                # print("glob_file_folder --> {} -- {} -- {}".format(cmd, path_file, path_folder_file))
+                for pff in path_folder_file:
+                    path_executable.append(os.path.abspath(pff))
+                break
+            # else:
+            #     whereis_cmd = whereisPathForCommand(cmd)
+            #     if whereis_cmd != None:
+            #         path_executable.append(os.path.abspath(whereis_cmd))
+                
+
+
+            # print("is_path_file_exists --> {} -- {}".format(is_path_file_exists, path_file))
+            # if path_file[-1] != "*":
+            #     if not is_path_file_exists:
+            #         try:
+            #             if path_exe == "":
+            #                 continue
+            #             ret_get_path = check_output("find {} -name {} 2> /dev/null".format(path_exe, path_file), shell=True).decode("latin").strip()
+            #             print("ret_get_path ---> {} -- {} -- {}".format(ret_get_path, path_exe, path_file))
+            #             if(len(ret_get_path) > 0):
+            #                 print("ret_get_path ==> {}".format(ret_get_path))
+            #                 path_executable.append(ret_get_path)
+            #         except CalledProcessError as cpe:
+            #             # print("[ERROR] {}".format(cpe))
+            #             # print("path_exe : {} and cmd : {}".format(path_exe, path_file))
+            #             continue
+            #     else:
+            #         path_executable.append(os.path.abspath(path_file))
+    
+    path_executable = removeItemInList(path_executable, ".")
+    path_executable = removeItemInList(path_executable, "..")
     return path_executable
 
 
@@ -112,6 +168,7 @@ def getUidAndGidProcess(pid):
     list_uid_gid = check_output(["ps", "-o", "uid,gid", "-p", str(pid), "--no-header"]).decode("latin").strip().split('  ')
     return {"uid": list_uid_gid[0], "gid": list_uid_gid[1]}
 
+'''
 # test_pid = 11960
 test_pid = 25404
 # test_pid = 11091
@@ -142,6 +199,7 @@ print("Format process -->\nExe : {}\ncmdline: {}\nenviron : {}\nparents : {}\nch
     p.terminal(),
     p.open_files()
 ))
+'''
 
 # exit(1)
 ################################################################################################
@@ -162,8 +220,7 @@ def findFiles(process_dict):
             print("TEST --> {}".format(e))
 
 
-process_dict = p.as_dict()
-findFiles(process_dict)
+
 
 # Tout les pid qui ont pour parent 
 # permettre à python3 d'être executé
@@ -181,7 +238,7 @@ findFiles(process_dict)
 # exit(1)
 
 # pwdx 7844
-
+'''
 print("\nPid : {}\nPath : {}\nCommand Line : {}\nUsername : {}\nSSH CONNECTION ---\nLOGNAME : {}\nSsh : {}\n".format(
     process_dict["pid"],
     process_dict["cwd"],
@@ -190,6 +247,7 @@ print("\nPid : {}\nPath : {}\nCommand Line : {}\nUsername : {}\nSSH CONNECTION -
     process_dict["environ"]["LOGNAME"] if "LOGNAME" in process_dict["environ"] else None,
     process_dict["environ"]["SSH_CONNECTION"] if "SSH_CONNECTION" in process_dict["environ"] else None,
 ))
+'''
 
 # --> get ppid : ps axjf
 
@@ -330,41 +388,8 @@ Soit : On demande à l'utilisateur de valider/refuser le process
 Soit : On le fait automatiquement (on refuse le process après XX secondes)
 '''
 
-def initializeAllProcessPresent():
-    all_process = psutil.pids()
-    kernel_process = getKernelProcess()
-    new_process = [ap for ap in all_process if ap not in kernel_process]
-    print("new_process --> {}".format(new_process))
-    for np in new_process:
-        try:
-            ps_process = psutil.Process(np)
-            print("Process ==> {}".format(np))
-            path_not_found = getFileNotFoundInExe(np)
-            print("Path not found --> {}".format(path_not_found))
-            manage_process = manageAuthorizationExecutionForUser(ps_process.cmdline()[0], "gespenst")
-            print("Process_manage --> {}".format(manage_process))
-            # ps_process = psutil.Process(np)
-            # print("\n\nFormat process -->\nExe : {}\ncmdline: {}\nenviron : {}\nparents : {}\nchildren : {}\ncwd : {}\nterminal : {}\nOpenFile : {}\n".format(
-            #     ps_process.exe(),
-            #     ps_process.cmdline(),
-            #     ps_process.environ(),
-            #     ps_process.parents(),
-            #     ps_process.children(recursive=True),
-            #     ps_process.cwd(),
-            #     ps_process.terminal(),
-            #     ps_process.open_files()
-            # ))
-            sss = input("Pass : ")
-            # ps_process.suspend()
-            # print("[>] Processus {} stoppé.".format(np))
-            # manageProcessForUser(np)
-        except psutil.AccessDenied:
-            continue
 
-    return new_process
-
-initializeAllProcessPresent()
-exit(1)
+# exit(1)
 
 def handleProcess():
     all_process = psutil.pids()
@@ -405,11 +430,27 @@ def handleProcess():
 
 # getFileFromProcess(p)
 
-while(1):
-    print("handle_process")
-    handleProcess()
-    time.sleep(5)
+# while(1):
+#     print("handle_process")
+#     handleProcess()
+#     time.sleep(5)
 
+
+def waitingForAction(pid, user, waiting_processes, DENY_AFTER_TIME_PASS=True):
+    psutil_pid = psutil.Process(pid)
+    waiting_processes[pid][0] -= 1
+    psutil_pid.suspend()
+
+    print("is_ruuning --> {}".format(psutil_pid.is_running()))
+
+    if waiting_processes[pid][0] < 0: # DENY AFTER TIME PASSED (true or false) --- 
+        if DENY_AFTER_TIME_PASS:
+            main_process_authorization =  mainProcessAuthorizationExe(waiting_processes[pid][1], user, authorization_exe_decision="den")
+            print("main_process_authorization ---> {}".format(main_process_authorization))
+        waiting_processes.pop(pid)
+        psutil_pid.kill()
+    return waitingForAction
+        
 
 
 

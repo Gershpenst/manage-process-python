@@ -129,17 +129,40 @@ def putFiableExeForUser(path_exe, authorization, type_of_authorization, user="al
             user_exe_authorization[user][authorization][type_of_authorization].append(path_exe)
             writeInJsonFile(user_exe_authorization)
 
+def findPathInAuthorization(list_of_paths, path_to_find):
+    for lop in list_of_paths:
+        print("findPathInAuthorization ---> {} == {}".format(lop,path_to_find))
+        if lop in path_to_find:
+            return lop
+    return None
+
 
 def authorizationForUser(path_exe, user, type_of_authorization):
     user_exe_authorization = readFromFile(json_file=FILE_USER_EXE_AUTHORIZATION)
     all_sha256_exe = readFromFile(json_file=FILE_HASH_EXE)
-    if type_of_authorization == PROCESS_EXE or type_of_authorization == PATH_TO_PROCESS_EXE:
+    if type_of_authorization == PROCESS_EXE:
         if path_exe in user_exe_authorization[user][DENY_EXE][type_of_authorization]:
-            return DENY_EXE, all_sha256_exe[path_exe] if type_of_authorization == PROCESS_EXE else user_exe_authorization[user][DENY_EXE][type_of_authorization]
+            return DENY_EXE, all_sha256_exe[path_exe]
         if path_exe in user_exe_authorization[user][ALWAYS_ASK_EXE][type_of_authorization]:
-            return ALWAYS_ASK_EXE, all_sha256_exe[path_exe] if type_of_authorization == PROCESS_EXE else user_exe_authorization[user][ALWAYS_ASK_EXE][type_of_authorization]
+            return ALWAYS_ASK_EXE, all_sha256_exe[path_exe]
         if path_exe in user_exe_authorization[user][ALLOW_EXE][type_of_authorization]:
-            return ALLOW_EXE, all_sha256_exe[path_exe] if type_of_authorization == PROCESS_EXE else user_exe_authorization[user][ALLOW_EXE][type_of_authorization]
+            return ALLOW_EXE, all_sha256_exe[path_exe]
+    elif type_of_authorization == PATH_TO_PROCESS_EXE:
+        find_path_refuse = findPathInAuthorization(user_exe_authorization[user][DENY_EXE][type_of_authorization], path_exe)
+        find_path_always_ask = findPathInAuthorization(user_exe_authorization[user][ALWAYS_ASK_EXE][type_of_authorization], path_exe)
+        find_path_accept = findPathInAuthorization(user_exe_authorization[user][ALLOW_EXE][type_of_authorization], path_exe)
+        if find_path_refuse != None:
+            return DENY_EXE, find_path_refuse
+        if find_path_always_ask != None:
+            return ALWAYS_ASK_EXE, find_path_always_ask
+        if find_path_accept != None:
+            return ALLOW_EXE, find_path_accept
+        # if user_exe_authorization[user][DENY_EXE][type_of_authorization] in path_exe:
+        #     return DENY_EXE, user_exe_authorization[user][DENY_EXE][type_of_authorization]
+        # if user_exe_authorization[user][ALWAYS_ASK_EXE][type_of_authorization] in path_exe:
+        #     return ALWAYS_ASK_EXE, user_exe_authorization[user][ALWAYS_ASK_EXE][type_of_authorization]
+        # if  user_exe_authorization[user][ALLOW_EXE][type_of_authorization] in path_exe:
+        #     return ALLOW_EXE, user_exe_authorization[user][ALLOW_EXE][type_of_authorization]
     return None
 
 
@@ -155,12 +178,14 @@ def getAuthorizedShaForUser(path_exe, user, type_of_authorization):
 
 def manageAuthorizationExecutionForUser(path_exe, user):
     get_authorization_hash_user_path = getAuthorizedShaForUser(path_exe, user, PATH_TO_PROCESS_EXE)
+    print("get_authorization_hash_user_path --> {}".format(get_authorization_hash_user_path))
     if get_authorization_hash_user_path != None and get_authorization_hash_user_path[0] == DENY_EXE:
         print("Deny path : {}".format(get_authorization_hash_user_path[1]))
         return KILL_IT, get_authorization_hash_user_path
 
     get_authorization_hash_user_process = getAuthorizedShaForUser(path_exe, user, PROCESS_EXE)
     hash_exe = hashExeSha256(path_exe)
+    print("get_authorization_hash_user_process --->\n{}\n{}\n{}".format(path_exe, get_authorization_hash_user_process, hash_exe))
 
     if get_authorization_hash_user_process != None and get_authorization_hash_user_process[0] == DENY_EXE and get_authorization_hash_user_process[1] == hash_exe:
         print("Deny process : {}".format(get_authorization_hash_user_process[1]))
@@ -175,14 +200,16 @@ def manageAuthorizationExecutionForUser(path_exe, user):
     return ASK_THEM, get_authorization_hash_user_process
 
 
-def manageProcessAuthorizationExe(path_exe, type_of_authorization, user):
+def manageProcessAuthorizationExe(path_exe, type_of_authorization, user, authorization_exe=""):
     str_authorization = ""
     if type_of_authorization == "PROCESS":
         str_authorization = "Accepter, refuser ou toujours demander l'autorisation d'utiliser le binaire '{}' [acc/den/ask] ? ".format(path_exe)
     else:
         str_authorization = "Accepter, refuser ou toujours demander l'autorisation d'executer un binaire dans le répertoire '{}' [acc/den/ask] ? ".format(path_exe)
-    authorization_exe = input(str_authorization)
+    if authorization_exe == "":
+        authorization_exe = input(str_authorization)
     if authorization_exe == "acc":
+        print("Accepter un processus : {}".format(path_exe))
         putFiableExeForUser(path_exe, ALLOW_EXE, type_of_authorization, user=user)
     elif authorization_exe == "den":
         putFiableExeForUser(path_exe, DENY_EXE, type_of_authorization, user=user)
@@ -191,33 +218,44 @@ def manageProcessAuthorizationExe(path_exe, type_of_authorization, user):
     return authorization_exe
 
 
-def mainProcessAuthorizationExe(path_exe, user, type_of_authorization):
+def mainProcessAuthorizationExe(path_exe, user, authorization_exe_decision=""):
     path_exe = os.path.abspath(path_exe)
-    if (type_of_authorization == PROCESS_EXE and not os.path.isfile(path_exe)) or (type_of_authorization == PATH_TO_PROCESS_EXE and not os.path.isdir(path_exe)):
+    # if (type_of_authorization == PROCESS_EXE and not os.path.isfile(path_exe)) or (type_of_authorization == PATH_TO_PROCESS_EXE and not os.path.isdir(path_exe)):
+    #     return NOT_EXISTS
+    type_of_authorization = ""
+    if os.path.isfile(path_exe):
+        type_of_authorization = PROCESS_EXE
+    elif os.path.isdir(path_exe):
+        type_of_authorization = PATH_TO_PROCESS_EXE
+    else:
         return NOT_EXISTS
-        
     manage_process = manageAuthorizationExecutionForUser(path_exe, user)
     print("manage_process ==> {}".format(manage_process))
     if manage_process[0] == ASK_THEM:
         authorization_exe = ""
         while(authorization_exe != "acc" and authorization_exe != "den" and authorization_exe != "ask"):
-            authorization_exe = manageProcessAuthorizationExe(path_exe, type_of_authorization, user)
+            authorization_exe = manageProcessAuthorizationExe(path_exe, type_of_authorization, user, authorization_exe=authorization_exe_decision)
+            manage_process = manageAuthorizationExecutionForUser(path_exe, user)
+            print("Decision process action : {}".format(authorization_exe))
     return manage_process
+
+
+# def processAuthorizationCli(process):
 
 
 # PROCESS_EXE, PATH_TO_PROCESS_EXE
 
 # Test pour les processes (acc, den, ask)
-main_process_authorization =  mainProcessAuthorizationExe("/usr/bin/python2.7", "gespenst", PROCESS_EXE)
-print("main_process_authorization ==> {}".format(main_process_authorization))
-
-main_process_authorization =  mainProcessAuthorizationExe("/usr/bin/python2.7", "gespenst", PROCESS_EXE)
-print("main_process_authorization ==> {}".format(main_process_authorization))
-
-# main_process_authorization =  mainProcessAuthorizationExe("/home/gespenst/", "gespenst", PATH_TO_PROCESS_EXE)
+# main_process_authorization =  mainProcessAuthorizationExe("/usr/bin/python2.7", "gespenst")
 # print("main_process_authorization ==> {}".format(main_process_authorization))
 
-# main_process_authorization =  mainProcessAuthorizationExe("/home/../../home/gespenst/", "gespenst", PATH_TO_PROCESS_EXE)
+# main_process_authorization =  mainProcessAuthorizationExe("/usr/bin/python2.7", "gespenst")
+# print("main_process_authorization ==> {}".format(main_process_authorization))
+
+main_process_authorization =  mainProcessAuthorizationExe("/home/gespenst/accept_all_script/test_process_c", "gespenst")
+print("main_process_authorization ==> {}".format(main_process_authorization))
+
+# main_process_authorization =  mainProcessAuthorizationExe("/home/../../home/gespenst/", "gespenst")
 # print("main_process_authorization ==> {}".format(main_process_authorization))
 # print("all_sha256_exe ===> {}\n".format(all_sha256_exe))
 
