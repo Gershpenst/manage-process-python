@@ -4,9 +4,9 @@ import time
 import os
 from glob import glob
 
-from manage_authorization_process import mainProcessAuthorizationExe
+from manage_authorization_process import mainProcessAuthorizationExe, readFromFile, writeInJsonFile, manageAuthorizationExecutionForUser, FILE_ALL_PROCESS_PID_WAITING
+# from main import FILE_ALL_PROCESS_PID_WAITING
 
-from manage_authorization_process import manageAuthorizationExecutionForUser
 # import pwd
 
 
@@ -54,7 +54,7 @@ def getKernelProcess():
     kernel_process.append(1)
     for i in range(len(kernel_process)):
         kernel_process[i] = int(kernel_process[i])
-    print("kernel_process --> {}".format(kernel_process))
+    # print("kernel_process --> {}".format(kernel_process))
     return kernel_process
 
 def removeItemInList(lst, item):
@@ -437,11 +437,9 @@ def handleProcess():
 
 
 def waitingForAction(pid, user, waiting_processes, DENY_AFTER_TIME_PASS=True):
-    psutil_pid = psutil.Process(pid)
+    psutil_pid = psutil.Process(int(pid))
     waiting_processes[pid][0] -= 1
     psutil_pid.suspend()
-
-    print("is_ruuning --> {}".format(psutil_pid.is_running()))
 
     if waiting_processes[pid][0] < 0: # DENY AFTER TIME PASSED (true or false) --- 
         if DENY_AFTER_TIME_PASS:
@@ -449,11 +447,29 @@ def waitingForAction(pid, user, waiting_processes, DENY_AFTER_TIME_PASS=True):
             print("main_process_authorization ---> {}".format(main_process_authorization))
         waiting_processes.pop(pid)
         psutil_pid.kill()
-    return waitingForAction
+    return waiting_processes
         
 
-
-
+def responseForAction(pid, user, action):
+    try:
+        psutil_pid = psutil.Process(pid)
+        waiting_processes = readFromFile(json_file=FILE_ALL_PROCESS_PID_WAITING)
+        main_process_authorization =  mainProcessAuthorizationExe(waiting_processes[str(pid)][1], user, authorization_exe_decision=action)
+        if action == "den":
+            psutil_pid.kill()
+        elif action == "acc" or action == "ask":
+            psutil_pid.resume()
+        waiting_processes.pop(str(pid))
+        writeInJsonFile(waiting_processes, json_file=FILE_ALL_PROCESS_PID_WAITING, replace_all_content_file=True)
+        return waiting_processes
+    except KeyError as ke:
+        print("Aucun processus {} en attente d'action.".format(pid))
+    except psutil.NoSuchProcess as nsp:
+        print(nsp)
+    except Exception as e:
+        print("Une erreur est survenue.")
+        print(e)
+    return None
 # https://unix.stackexchange.com/questions/2881/show-a-notification-across-all-running-x-displays
 # notify-send hello
 # ===> https://github.com/dunst-project/dunst

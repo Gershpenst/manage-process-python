@@ -1,7 +1,7 @@
 import psutil
 import time
 
-from manage_authorization_process import initializeAllConfiguration, mainProcessAuthorizationExe, manageAuthorizationExecutionForUser, PROCESS_EXE, KILL_IT, ASK_THEM, ALLOW_IT
+from manage_authorization_process import readFromFile, writeInJsonFile, initializeAllConfiguration, mainProcessAuthorizationExe, manageAuthorizationExecutionForUser, FILE_ALL_PROCESS_PID_WAITING, PROCESS_EXE, KILL_IT, ASK_THEM, ALLOW_IT
 from manage_process import getKernelProcess, getFileNotFoundInExe, waitingForAction
 
 # Permet d'accepter, refuser ou demander le droit d'executer des binaires dans un répertoire
@@ -12,33 +12,30 @@ from manage_process import getKernelProcess, getFileNotFoundInExe, waitingForAct
 # main_process_authorization =  mainProcessAuthorizationExe("/usr/bin/python2.7", "gespenst")
 # print("main_process_authorization ==> {}".format(main_process_authorization))
 
-ALL_PROCESS_PID = {"ALLOW": [], "DENY": [], "WAITING": {}}
 
-NBR_WAIT_FOR_ACTION = 2
+NBR_WAIT_FOR_ACTION = 24
 
 def initializeAllPresentProcess():
-    initializeAllConfiguration()
-
+    initialize_configuration = initializeAllConfiguration()
     all_process = psutil.pids()
     kernel_process = getKernelProcess()
     new_process = [ap for ap in all_process if ap not in kernel_process]
-    for np in new_process:
-        try:
-            ps_process = psutil.Process(np)
-            cmdline = ps_process.cmdline()
-            path_not_found = getFileNotFoundInExe(np)
-            if len(path_not_found) > 0:
-                for pnf in path_not_found:
-                    ALL_PROCESS_PID["ALLOW"].append(np)
-                    main_process_authorization =  mainProcessAuthorizationExe(pnf, "all", authorization_exe_decision="acc")
-                    print("Process_manage --> {} -- {}".format(pnf, main_process_authorization))
-            # sss = input("PASS : ")
-        except psutil.AccessDenied:
-            continue
-        except psutil.NoSuchProcess:
-            continue
 
-    print("ALL_PROCESS_PID --> {}".format(ALL_PROCESS_PID))
+    if initialize_configuration:
+        for np in new_process:
+            try:
+                ps_process = psutil.Process(np)
+                cmdline = ps_process.cmdline()
+                path_not_found = getFileNotFoundInExe(np)
+                if len(path_not_found) > 0:
+                    for pnf in path_not_found:
+                        main_process_authorization =  mainProcessAuthorizationExe(pnf, "all", authorization_exe_decision="acc")
+                        # print("Process_manage --> {} -- {}".format(pnf, main_process_authorization))
+                # sss = input("PASS : ")
+            except psutil.AccessDenied:
+                continue
+            except psutil.NoSuchProcess:
+                continue
     return new_process
 
 
@@ -62,13 +59,19 @@ def handleProcess():
                 for pnf in path_not_found:
                     manage_process = manageAuthorizationExecutionForUser(pnf, "gespenst")
                     if manage_process[0] == KILL_IT:
+                        print("Kill du processus --> {}".format(np))
                         ps_process.kill()
                     elif manage_process[0] != ALLOW_IT:
-                        print("\n\ncmdline --> {}".format(cmdline))
-                        print("Process_manage --> {} -- {}".format(pnf, manage_process))
-                        if not (np in ALL_PROCESS_PID["WAITING"]):
-                            ALL_PROCESS_PID["WAITING"][np] = [NBR_WAIT_FOR_ACTION, pnf]
-                        waitingForAction(np, "gespenst", ALL_PROCESS_PID["WAITING"])
+                        print("Stop du processus --> {}".format(np))
+                        # print("\n\ncmdline --> {}".format(cmdline))
+                        # print("Process_manage --> {} -- {}".format(pnf, manage_process))
+                        waiting_processes = readFromFile(json_file=FILE_ALL_PROCESS_PID_WAITING)
+                        print("waiting_processes --> {}".format(waiting_processes))
+                        if not (str(np) in waiting_processes):
+                            waiting_processes[str(np)] = [NBR_WAIT_FOR_ACTION, pnf]
+                        waiting_processes = waitingForAction(str(np), "gespenst", waiting_processes)
+                        print("waiting_processes ---> {}".format(waiting_processes))
+                        writeInJsonFile(waiting_processes, json_file=FILE_ALL_PROCESS_PID_WAITING)
                         # print("Suspend process --> ")
                         # ps_process.suspend() # stop process
                         # time.sleep(10)
