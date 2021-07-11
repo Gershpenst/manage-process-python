@@ -1,21 +1,19 @@
 import psutil
+import os
 import time
 
-from manage_authorization_process import readFromFile, writeInJsonFile, initializeAllConfiguration, mainProcessAuthorizationExe, manageAuthorizationExecutionForUser, FILE_ALL_PROCESS_PID_WAITING, PROCESS_EXE, KILL_IT, ASK_THEM, ALLOW_IT
-from manage_process import getKernelProcess, getFileNotFoundInExe, waitingForAction
-
-# Permet d'accepter, refuser ou demander le droit d'executer des binaires dans un répertoire
-# main_process_authorization =  mainProcessAuthorizationExe("/home/gespenst/", "gespenst")
-# print("main_process_authorization ==> {}".format(main_process_authorization))
-
-# Permet d'accepter, refuser ou demander le droit d'executer un binaire spécifiquement
-# main_process_authorization =  mainProcessAuthorizationExe("/usr/bin/python2.7", "gespenst")
-# print("main_process_authorization ==> {}".format(main_process_authorization))
-
-
-NBR_WAIT_FOR_ACTION = 24
+from env import ALLOW_IT, FILE_ALL_PROCESS_PID_WAITING, KILL_IT, NBR_WAIT_FOR_ACTION
+from manage_process import getKernelProcess, getFileNotFoundInExe, waitingForAction, verifyProcessExists
+from process_manage_user import mainProcessAuthorizationExe, manageAuthorizationExecutionForUser
+from tools import readFromFile, writeInJsonFile, initializeAllConfiguration
 
 def initializeAllPresentProcess():
+    '''
+    /!\ Cette fonction est executé une seule fois.
+    Initialise tous les processus dans les fichiers créés  à partir de la fonction "initializeAllConfiguration".
+    Ces processus sont tous acceptés d'office afin de générer un fichier regroupant déjà des processus autorisés.
+    C'est pour cela qu'il est recommandé d'executé ce script sur un environnement sain.
+    '''
     initialize_configuration = initializeAllConfiguration()
     all_process = psutil.pids()
     kernel_process = getKernelProcess()
@@ -39,9 +37,12 @@ def initializeAllPresentProcess():
     return new_process
 
 
-# initializeAllPresentProcess()
-
 def handleProcess():
+    '''
+    Permet de gérer les processus des utilisateurs. Lorsqu'un processus inconnus est trouvé à partir du fichier regroupant les processus initialisés,
+    celui-ci est arrêté et est soumis à une analyse manuelle de l'utilisateur. Si l'utilisateur trouve que le fichier est inofensif, l'utilisateur pourra
+    lever l'exception à partir des fonctions CLI développées. Sinon le processus sera "deny" et kill.
+    '''
     all_process = psutil.pids()
     kernel_process = getKernelProcess()
     new_process = [ap for ap in all_process if ap not in kernel_process]
@@ -50,6 +51,10 @@ def handleProcess():
     # Trouver la personne qui execute ce fichier
     #####
 
+    waiting_processes = readFromFile(json_file=FILE_ALL_PROCESS_PID_WAITING)
+    waiting_processes = verifyProcessExists(waiting_processes)
+    print("verify_process_exists --> {}".format(waiting_processes)) 
+
     for np in new_process:
         try:
             ps_process = psutil.Process(np)
@@ -57,27 +62,17 @@ def handleProcess():
             path_not_found = getFileNotFoundInExe(np)
             if len(path_not_found) > 0:
                 for pnf in path_not_found:
-                    manage_process = manageAuthorizationExecutionForUser(pnf, "gespenst")
+                    manage_process = manageAuthorizationExecutionForUser(pnf, os.getlogin())
                     if manage_process[0] == KILL_IT:
                         print("Kill du processus --> {}".format(np))
                         ps_process.kill()
                     elif manage_process[0] != ALLOW_IT:
                         print("Stop du processus --> {}".format(np))
-                        # print("\n\ncmdline --> {}".format(cmdline))
-                        # print("Process_manage --> {} -- {}".format(pnf, manage_process))
-                        waiting_processes = readFromFile(json_file=FILE_ALL_PROCESS_PID_WAITING)
-                        print("waiting_processes --> {}".format(waiting_processes))
                         if not (str(np) in waiting_processes):
                             waiting_processes[str(np)] = [NBR_WAIT_FOR_ACTION, pnf]
-                        waiting_processes = waitingForAction(str(np), "gespenst", waiting_processes)
+                        waiting_processes = waitingForAction(str(np), os.getlogin(), waiting_processes)
                         print("waiting_processes ---> {}".format(waiting_processes))
                         writeInJsonFile(waiting_processes, json_file=FILE_ALL_PROCESS_PID_WAITING)
-                        # print("Suspend process --> ")
-                        # ps_process.suspend() # stop process
-                        # time.sleep(10)
-
-                        # main_process_authorization =  mainProcessAuthorizationExe(pnf, "gespenst", authorization_exe_decision="den")
-                        # print("Process_manage --> {} -- {}".format(pnf, main_process_authorization))
         except psutil.AccessDenied:
             continue
         except psutil.NoSuchProcess:
@@ -85,32 +80,14 @@ def handleProcess():
 
     return new_process
 
-# Process_manage --> /home/gespenst/manage-process-python/main.py -- (0, ('allow', '9094936f464be4a2463f3843cae449c8d33a6d2a9e0e2625f47c14e4ee5219ec'))
 
-# initializeAllPresentProcess()
-
-# def handleProcess():
-#     all_process = psutil.pids()
-#     new_process = findNewProcess(all_process_allow, all_process)
-#     print("new_process --> {}".format(new_process))
-#     kernel_process = getKernelProcess()
-
-#     # Faire le trie des process avec le fichier qu'on a mis en place (execution des process dans un chemin, certains process etc)
-#     # peut-être en faisant du parallélisme.
-
-#     # ASK_AGAIN && Non trouvé dans les fichiers
-#     for np in new_process:
-#         if not (np in kernel_process):
-#             ret_resp = call(["kill", "-STOP", str(np)])
-#             print("[>] Processus {} stoppé.".format(np))
-#             manageProcessForUser(np)
-
-
-def main():
+if __name__ == "__main__":
     initializeAllPresentProcess()
     while(1):
-        print("handle_process")
         handleProcess()
         time.sleep(5)
 
-main()
+
+'''
+Virus total (pour vérifier les hash des fichiers)
+'''
