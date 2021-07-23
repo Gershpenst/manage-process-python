@@ -104,6 +104,7 @@ def initializeAllConfiguration():
 
     user_uid = os.geteuid()
     if user_uid == 0:
+        from process_manage_user import createUserForExeAuthorization
         createUserForExeAuthorization()
     else:
         user_name = pwd.getpwuid(user_uid).pw_name
