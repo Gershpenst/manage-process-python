@@ -36,7 +36,8 @@ def createUserForExeAuthorization():
     '''
     for user in pwd.getpwall():
         supposed_normal_user = int(user.pw_uid)
-        if supposed_normal_user >= 1000 and supposed_normal_user <= 60000:
+        print("supposed_normal_user ---> {}".format(supposed_normal_user))
+        if supposed_normal_user == 0 or supposed_normal_user >= 1000 and supposed_normal_user <= 60000:
             print("createUserForExeAuthorization ==> ", user.pw_name)
             addUserInJson(user.pw_name, json_file=FILE_USER_EXE_AUTHORIZATION)
 
